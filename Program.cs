@@ -12,7 +12,7 @@ class Program
     private static List<string> LoadExclusionsFromFile()
     {
         string solutionDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string exclusionsFilePath = Path.Combine(solutionDirectory, "exclusions.txt");
+        string exclusionsFilePath = Path.Combine(solutionDirectory, "mobilePayExclusions.txt");
 
         if (!File.Exists(exclusionsFilePath))
         {
