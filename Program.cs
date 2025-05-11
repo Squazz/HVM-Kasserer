@@ -7,13 +7,54 @@ using DocumentFormat.OpenXml.Vml.Office;
 class Program
 {
     private static string mobilePayFilepath = @"D:\Dropbox\HVM - Kasserer\Indsamlinger\2025 Indsamlinger\transactions-report-1_1_2024-12_29_2024.csv";
+
+    static string exclusionsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "mobilePayExclusions.txt");
+    static string matchesFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "cprToAddressMatches.xlsx");
+
     static List<string> exclusions = LoadExclusionsFromFile();
+    static List<CprToSenderMatch> matches = LoadMatchesFromFile();
+
+    private static List<CprToSenderMatch> LoadMatchesFromFile()
+    {
+        if (!File.Exists(matchesFilePath))
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Matches file not found at: {matchesFilePath}");
+            Console.ForegroundColor = ConsoleColor.Gray;
+            return new List<CprToSenderMatch>();
+        }
+
+        var matches = new List<CprToSenderMatch>();
+
+        using (var workbook = new XLWorkbook(matchesFilePath))
+        {
+            var worksheet = workbook.Worksheet(1); // Assuming the matches are in the first sheet
+
+            foreach (var row in worksheet.RowsUsed().Skip(1)) // Skip the header row
+            {
+                string cpr = row.Cell(1).GetValue<string>().Trim(); // Column A
+                string address = row.Cell(2).GetValue<string>().Trim(); // Column B
+                string keywords = row.Cell(3).GetValue<string>().Trim(); // Column C
+
+                if (!string.IsNullOrWhiteSpace(cpr) && !string.IsNullOrWhiteSpace(address))
+                {
+                    matches.Add(new CprToSenderMatch
+                    {
+                        CPR = cpr,
+                        SenderAddress = address,
+                        Keywords = !string.IsNullOrWhiteSpace(keywords)
+                            ? keywords.Split(',').Select(k => k.Trim()).ToList()
+                            : new List<string>()
+                    });
+                }
+            }
+        }
+
+        return matches;
+    }
 
     private static List<string> LoadExclusionsFromFile()
     {
-        string solutionDirectory = AppDomain.CurrentDomain.BaseDirectory;
-        string exclusionsFilePath = Path.Combine(solutionDirectory, "mobilePayExclusions.txt");
-
         if (!File.Exists(exclusionsFilePath))
         {
             Console.ForegroundColor = ConsoleColor.Red;
@@ -32,6 +73,7 @@ class Program
 
     static void Main()
     {
+        var test = matches;
         SummarizeMobilePayTransactions();
     }
 
@@ -400,6 +442,13 @@ class Program
         workbook.Save();
         Console.WriteLine($"Excluded amount {excludedAmount} added to 'arrangementer' column above 'I alt'.");
     }
+}
+
+class CprToSenderMatch
+{
+    public required string CPR { get; set; }
+    public required string SenderAddress { get; set; }
+    public List<string>? Keywords { get; set; }
 }
 
 class Transaction
