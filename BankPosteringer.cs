@@ -24,36 +24,56 @@ namespace HVM_Kasserer
         public void HandleBankPosteringer()
         {
             // Get all of the transactions parsed to an object we can use
-            var transactionData = new List<BankPostering>();
-            using (var reader = new StreamReader(bankPosteringerFilepath))
-            {
-                // Skip the header row
-                reader.ReadLine();
-
-                CultureInfo cultureInfo = CultureInfo.GetCultureInfo("da-DK");
-
-                while (!reader.EndOfStream)
-                {
-                    var line = reader.ReadLine();
-                    if (line == null) break;
-
-                    string[] values = line.Split(';');
-
-                    transactionData.Add(new BankPostering
-                    {
-                        Date = DateTime.Parse(values[0], cultureInfo),
-                        Message = values[1],
-                        Amount = decimal.Parse(values[2], cultureInfo),
-                        Address = values[6]
-                    });
-                }
-            }
+            List<BankPostering> transactionData = ExtractTransactionsDataFromCSV();
 
             // Only use transactions with positive amounts
             transactionData = transactionData.Where(t => t.Amount > 0).ToList();
 
+            AddAddressAndCPRPairsToFile(transactionData);
+
+            // summerize the transactions by month
+            var transactionsByMonth = transactionData
+                .GroupBy(t => new { t.Date.Year, t.Date.Month })
+                .Select(g => new
+                {
+                    g.Key.Year,
+                    g.Key.Month,
+                    TotalAmount = g.Sum(t => t.Amount)
+                })
+                .ToList();
+
+            // Print the summary
+            Console.WriteLine("Monthly Summary:");
+            foreach (var month in transactionsByMonth)
+            {
+                Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, Total Amount: {month.TotalAmount}");
+            }
+
+            // For every month, group the transactions by address and sum the amounts for each address
+            var transactionsByAddress = transactionData
+                .GroupBy(t => new { t.Date.Year, t.Date.Month, t.Address })
+                .Select(g => new
+                {
+                    g.Key.Year,
+                    g.Key.Month,
+                    g.Key.Address,
+                    TotalAmount = g.Sum(t => t.Amount)
+                })
+                .ToList();
+
+            // Print the summary
+            Console.WriteLine("\nMonthly Summary by Address:");
+            foreach (var month in transactionsByAddress)
+            {
+                Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, Address: {month.Address}, Total Amount: {month.TotalAmount}");
+            }
+
+        }
+
+        private void AddAddressAndCPRPairsToFile(List<BankPostering> transactionData)
+        {
             // traverse transactionData and find all destinct addresses, that is a multiline address
-            var addresses = transactionData
+            List<string> addresses = transactionData
                 .Select(t => t.Address)
                 .Distinct()
                 .Where(a => a.Contains(", "))
@@ -141,6 +161,36 @@ namespace HVM_Kasserer
                     }
                 }
             }
+        }
+
+        private List<BankPostering> ExtractTransactionsDataFromCSV()
+        {
+            var transactionData = new List<BankPostering>();
+            using (var reader = new StreamReader(bankPosteringerFilepath))
+            {
+                // Skip the header row
+                reader.ReadLine();
+
+                CultureInfo cultureInfo = CultureInfo.GetCultureInfo("da-DK");
+
+                while (!reader.EndOfStream)
+                {
+                    var line = reader.ReadLine();
+                    if (line == null) break;
+
+                    string[] values = line.Split(';');
+
+                    transactionData.Add(new BankPostering
+                    {
+                        Date = DateTime.Parse(values[0], cultureInfo),
+                        Message = values[1],
+                        Amount = decimal.Parse(values[2], cultureInfo),
+                        Address = values[6]
+                    });
+                }
+            }
+
+            return transactionData;
         }
 
         private List<CprToSenderMatch> LoadMatchesFromFile()
