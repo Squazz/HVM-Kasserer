@@ -139,7 +139,7 @@ namespace HVM_Kasserer
             }
         }
 
-        void UpdateExcelFile(string sheetName, string name, string last4PhoneDigits, string month, decimal value)
+        private void UpdateExcelFile(string sheetName, string name, string last4PhoneDigits, string month, decimal value)
         {
             // Open the workbook
             using var workbook = new XLWorkbook(excelFilepath);
@@ -248,7 +248,7 @@ namespace HVM_Kasserer
             Console.WriteLine("Excel file updated successfully.");
         }
 
-        List<string> LoadExclusionsFromFile()
+        private List<string> LoadExclusionsFromFile()
         {
             if (!File.Exists(exclusionsFilePath))
             {
@@ -264,7 +264,7 @@ namespace HVM_Kasserer
                        .ToList();
         }
 
-        string? GetMonthAsString(int monthNumber)
+        private string? GetMonthAsString(int monthNumber)
         {
             if (monthNumber == 1) return "Jan";
             if (monthNumber == 2) return "Feb";
@@ -282,7 +282,7 @@ namespace HVM_Kasserer
             return null;
         }
 
-        List<Transaction> GetTransactions()
+        private List<Transaction> GetTransactions()
         {
             var transactionData = new List<Transaction>();
 
@@ -316,7 +316,7 @@ namespace HVM_Kasserer
             return transactionData;
         }
 
-        string NormalizeString(string input)
+        private string NormalizeString(string input)
         {
             return Regex.Replace(input.ToLower(), @"\s+", " ").Trim();
         }
@@ -338,7 +338,7 @@ namespace HVM_Kasserer
         }
 
         // Method to insert excluded transactions above the "I alt" line
-        void UpdateExcelForExcluded(string sheetName, decimal excludedAmount, string date, string? messages)
+        private void UpdateExcelForExcluded(string sheetName, decimal excludedAmount, string date, string? messages)
         {
             using var workbook = new XLWorkbook(excelFilepath);
             var worksheet = workbook.Worksheet(sheetName);
