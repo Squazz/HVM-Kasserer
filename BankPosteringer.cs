@@ -12,7 +12,7 @@ namespace HVM_Kasserer
     {
         private string bankPosteringerFilepath = @"C:\Users\kaspe\Downloads\eksport.csv";
 
-        string matchesFilePath = @"D:\Dropbox\HVM - Kasserer\Program-kode\HVM Kasserer\cprToAddressMatches.xlsx";
+        string matchesFilePath = @"C:\Dropbox\HVM - Kasserer\Program-kode\HVM Kasserer\cprToAddressMatches.xlsx";
 
         List<CprToSenderMatch> cprToSenderMatches;
 
@@ -163,30 +163,56 @@ namespace HVM_Kasserer
             }
         }
 
+        private static bool StartsWithDate(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line) || line.Length < 10)
+                return false;
+
+            string first10 = line.Substring(0, 10);
+            return DateTime.TryParseExact(first10, "dd-MM-yyyy",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out _);
+        }
+
         private List<BankPostering> ExtractTransactionsDataFromCSV()
         {
             var transactionData = new List<BankPostering>();
             using (var reader = new StreamReader(bankPosteringerFilepath))
             {
-                // Skip the header row
-                reader.ReadLine();
+
+                string currentLine = null;
+                string nextLine = null;
 
                 CultureInfo cultureInfo = CultureInfo.GetCultureInfo("da-DK");
 
-                while (!reader.EndOfStream)
-                {
-                    var line = reader.ReadLine();
-                    if (line == null) break;
+                // Pseudocode:
+                // - Read a line from the CSV.
+                // - If the next line does not start with a date (format "dd-MM-yyyy"), append it to the current line.
+                // - Continue until a line starting with a date is found or end of file.
+                // - Then process the combined line as usual.
 
-                    string[] values = line.Split(';');
+                while ((currentLine = currentLine ?? reader.ReadLine()) != null)
+                {
+                    nextLine = reader.ReadLine();
+
+                    while (nextLine != null && !StartsWithDate(nextLine))
+                    {
+                        currentLine += " " + nextLine; // Or use newline or another delimiter
+                        nextLine = reader.ReadLine();
+                    }
+
+                    string[] values = currentLine.Split(';');
 
                     transactionData.Add(new BankPostering
                     {
                         Date = DateTime.Parse(values[0], cultureInfo),
                         Message = values[1],
                         Amount = decimal.Parse(values[2], cultureInfo),
-                        Address = values[6]
+                        Address = values[7]
                     });
+
+                    currentLine = nextLine;
                 }
             }
 
