@@ -172,6 +172,8 @@ namespace HVM_Kasserer
                     }
                 }
             }
+
+            cprToSenderMatches = LoadMatchesFromFile();
         }
 
         private static bool StartsWithDate(string line)
