@@ -60,25 +60,60 @@ namespace HVM_Kasserer
                 Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, Total Amount: {month.TotalAmount}");
             }
 
-            // For every month, group the transactions by address and sum the amounts for each address
-            var transactionsByAddress = transactionData
-                .GroupBy(t => new { t.Date.Year, t.Date.Month, t.Address })
-                .Select(g => new
+            var matchedPersons = new List<MonthlySummaryPerPerson>();
+
+            // For each transaction, based on the address and message, find the CPR number from the matches file
+            foreach (var transaction in transactionData)
+            {
+                // Try to find a match by address
+                var match = cprToSenderMatches.FirstOrDefault(m =>
+                    m.SenderAddress.Equals(transaction.Address, StringComparison.OrdinalIgnoreCase) &&
+                    (
+                        m.Keywords == null || m.Keywords.Count == 0 ||
+                        m.Keywords.Any(keyword => transaction.Message.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    )
+                );
+
+                if (match != null)
                 {
+                    var CPRnumbers = match.CPR.Split(",");
+
+                    foreach(var cpr in CPRnumbers)
+                    {
+                        var matchedPerson = new MonthlySummaryPerPersonWithAddress(
+                            transaction.Date.Year,
+                            transaction.Date.Month,
+                            transaction.Address,
+                            transaction.Amount,
+                            long.Parse(cpr)
+                        );
+
+                        matchedPersons.Add(matchedPerson);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"No CPR match found for transaction on {transaction.Date:yyyy-MM-dd} with address '{transaction.Address}' and message '{transaction.Message}'");
+                }
+            }
+
+            // For every month, group the transactions by address and sum the amounts for each address
+            var transactionsByAddress = matchedPersons
+                .GroupBy(t => new { t.Year, t.Month, t.CPRnumber })
+                .Select(g => new MonthlySummaryPerPerson(
                     g.Key.Year,
                     g.Key.Month,
-                    g.Key.Address,
-                    TotalAmount = g.Sum(t => t.Amount)
-                })
+                    g.Sum(t => t.TotalAmount),
+                    g.Key.CPRnumber
+                ))
                 .ToList();
 
             // Print the summary
             Console.WriteLine("\nMonthly Summary by Address:");
             foreach (var month in transactionsByAddress)
             {
-                Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, Address: {month.Address}, Total Amount: {month.TotalAmount}");
+                Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, CPR: {month.CPRnumber}, Total Amount: {month.TotalAmount}");
             }
-
         }
 
         private void AddAddressAndCPRPairsToFile(List<BankPostering> transactionData)
@@ -194,8 +229,8 @@ namespace HVM_Kasserer
             using (var reader = new StreamReader(bankPosteringerFilepath))
             {
 
-                string currentLine = null;
-                string nextLine = null;
+                string? currentLine = null;
+                string? nextLine = null;
 
                 CultureInfo cultureInfo = CultureInfo.GetCultureInfo("da-DK");
 
@@ -284,6 +319,32 @@ namespace HVM_Kasserer
             public required string Message { get; set; }
             public decimal Amount { get; set; }
             public required string Address { get; set; }
+        }
+    }
+
+    internal class MonthlySummaryPerPerson
+    {
+        public int Year { get; }
+        public int Month { get; }
+        public decimal TotalAmount { get; }
+        public long CPRnumber { get; }
+
+        public MonthlySummaryPerPerson(int year, int month, decimal totalAmount, long CPR)
+        {
+            Year = year;
+            Month = month;
+            TotalAmount = totalAmount;
+            CPRnumber = CPR;
+        }
+    }
+
+    internal class MonthlySummaryPerPersonWithAddress : MonthlySummaryPerPerson
+    {
+        public string Address { get; }
+
+        public MonthlySummaryPerPersonWithAddress(int year, int month, string address, decimal totalAmount, long CPR) : base(year, month, totalAmount, CPR)
+        {
+            Address = address;
         }
     }
 }
