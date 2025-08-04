@@ -26,8 +26,19 @@ namespace HVM_Kasserer
             // Get all of the transactions parsed to an object we can use
             List<BankPostering> transactionData = ExtractTransactionsDataFromCSV();
 
+            // Sort out transctions that are not from members
+            transactionData = transactionData.Where(t => 
+                !t.Address.Contains("Vipps", StringComparison.OrdinalIgnoreCase) &&
+                !t.Address.Contains("Begravelseshjælp", StringComparison.OrdinalIgnoreCase) &&
+                !t.Address.Contains("Korskærvej 25, 7000", StringComparison.OrdinalIgnoreCase) &&
+                !t.Address.Contains("Kirkegade 15, 8722  Hedensted", StringComparison.OrdinalIgnoreCase)
+            ).ToList();
+
             // Only use transactions with positive amounts
             transactionData = transactionData.Where(t => t.Amount > 0).ToList();
+
+            // Only transactions that are not kontingent
+            transactionData = transactionData.Where(t => !t.Message.Contains("kontingent", StringComparison.OrdinalIgnoreCase) && !t.Message.Contains("kont", StringComparison.OrdinalIgnoreCase)).ToList();
 
             AddAddressAndCPRPairsToFile(transactionData);
 
