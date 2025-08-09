@@ -27,22 +27,31 @@ namespace HVM_Kasserer
             List<BankPostering> transactionData = ExtractTransactionsDataFromCSV();
 
             // Sort out transctions that are not from members
-            transactionData = transactionData.Where(t => 
-                !t.Address.Contains("Vipps", StringComparison.OrdinalIgnoreCase) &&
-                !t.Address.Contains("Begravelseshjælp", StringComparison.OrdinalIgnoreCase) &&
-                !t.Address.Contains("Korskærvej 25, 7000", StringComparison.OrdinalIgnoreCase) &&
-                !t.Address.Contains("Kirkegade 15, 8722  Hedensted", StringComparison.OrdinalIgnoreCase)
+            transactionData = transactionData.Where(t =>
+                !t.Address.Contains("Vipps", StringComparison.OrdinalIgnoreCase) && // MobilePay
+                !t.Address.Contains("Begravelseshjælp", StringComparison.OrdinalIgnoreCase) && // ELN Begravelseshjælp
+                !t.Address.Contains("Korskærvej 25, 7000", StringComparison.OrdinalIgnoreCase) && // Indre Mission
+                !t.Address.Contains("Kirkegade 15, 8722  Hedensted", StringComparison.OrdinalIgnoreCase) // Hedensted Kirke
             ).ToList();
 
-            // Only use transactions with positive amounts
+            // Only use transactions with positive amounts, making sure we're look at donations and not our payments
             transactionData = transactionData.Where(t => t.Amount > 0).ToList();
 
+            var transactionsGroupedByAddress = transactionData
+                .OrderBy(t => t.Date)
+                .GroupBy(t => t.Address)
+                .ToList();
+
             // Only transactions that are not kontingent
-            transactionData = transactionData.Where(t => !t.Message.Contains("kontingent", StringComparison.OrdinalIgnoreCase) && !t.Message.Contains("kont", StringComparison.OrdinalIgnoreCase)).ToList();
+            var transactionDataWithOutKont = transactionData.Where(t =>
+                !t.Message.Contains("kontingent", StringComparison.OrdinalIgnoreCase) && // We prefer people mark with "kontingent"
+                !t.Message.Contains("kont", StringComparison.OrdinalIgnoreCase) // But we've seen that some use this abbriviation
+            ).ToList();
 
-            AddAddressAndCPRPairsToFile(transactionData);
+            // Run through all our existing mappings between adresses and CPR numbers
+            AddAddressAndCPRPairsToFile(transactionDataWithOutKont);
 
-            // summerize the transactions by month
+            // Summerize the transactions by month
             var transactionsByMonth = transactionData
                 .GroupBy(t => new { t.Date.Year, t.Date.Month })
                 .Select(g => new
@@ -63,39 +72,7 @@ namespace HVM_Kasserer
             var matchedPersons = new List<MonthlySummaryPerPerson>();
 
             // For each transaction, based on the address and message, find the CPR number from the matches file
-            foreach (var transaction in transactionData)
-            {
-                // Try to find a match by address
-                var match = cprToSenderMatches.FirstOrDefault(m =>
-                    m.SenderAddress.Equals(transaction.Address, StringComparison.OrdinalIgnoreCase) &&
-                    (
-                        m.Keywords == null || m.Keywords.Count == 0 ||
-                        m.Keywords.Any(keyword => transaction.Message.Contains(keyword, StringComparison.OrdinalIgnoreCase))
-                    )
-                );
-
-                if (match != null)
-                {
-                    var CPRnumbers = match.CPR.Split(",");
-
-                    foreach(var cpr in CPRnumbers)
-                    {
-                        var matchedPerson = new MonthlySummaryPerPersonWithAddress(
-                            transaction.Date.Year,
-                            transaction.Date.Month,
-                            transaction.Address,
-                            transaction.Amount,
-                            long.Parse(cpr)
-                        );
-
-                        matchedPersons.Add(matchedPerson);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine($"No CPR match found for transaction on {transaction.Date:yyyy-MM-dd} with address '{transaction.Address}' and message '{transaction.Message}'");
-                }
-            }
+            MapTransactionsToCPRNumbers(transactionData, matchedPersons);
 
             // For every month, group the transactions by address and sum the amounts for each address
             var transactionsByAddress = matchedPersons
@@ -113,6 +90,43 @@ namespace HVM_Kasserer
             foreach (var month in transactionsByAddress)
             {
                 Console.WriteLine($"Year: {month.Year}, Month: {month.Month}, CPR: {month.CPRnumber}, Total Amount: {month.TotalAmount}");
+            }
+        }
+
+        private void MapTransactionsToCPRNumbers(List<BankPostering> transactionData, List<MonthlySummaryPerPerson> matchedPersons)
+        {
+            foreach (var transaction in transactionData)
+            {
+                // Try to find a match by address
+                var match = cprToSenderMatches.FirstOrDefault(m =>
+                    m.SenderAddress.Equals(transaction.Address, StringComparison.OrdinalIgnoreCase) &&
+                    (
+                        m.Keywords == null || m.Keywords.Count == 0 ||
+                        m.Keywords.Any(keyword => transaction.Message.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+                    )
+                );
+
+                if (match != null)
+                {
+                    var CPRnumbers = match.CPR.Split(",");
+
+                    foreach (var cpr in CPRnumbers)
+                    {
+                        var matchedPerson = new MonthlySummaryPerPersonWithAddress(
+                            transaction.Date.Year,
+                            transaction.Date.Month,
+                            transaction.Address,
+                            transaction.Amount,
+                            long.Parse(cpr)
+                        );
+
+                        matchedPersons.Add(matchedPerson);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"No CPR match found for transaction on {transaction.Date:yyyy-MM-dd} with address '{transaction.Address}' and message '{transaction.Message}'");
+                }
             }
         }
 
