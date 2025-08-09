@@ -111,7 +111,7 @@ namespace HVM_Kasserer
                             transaction.Date.Year,
                             transaction.Date.Month,
                             transaction.Address,
-                            transaction.Amount,
+                            transaction.Amount / CPRnumbers.Count(),
                             long.Parse(cpr)
                         );
 
