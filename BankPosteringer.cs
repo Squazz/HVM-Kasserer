@@ -37,14 +37,8 @@ namespace HVM_Kasserer
                 .GroupBy(t => t.Address)
                 .ToList();
 
-            // Only transactions that are not kontingent
-            var transactionDataWithOutKont = transactionData.Where(t =>
-                !t.Message.Contains("kontingent", StringComparison.OrdinalIgnoreCase) && // We prefer people mark with "kontingent"
-                !t.Message.Contains("kont", StringComparison.OrdinalIgnoreCase) // But we've seen that some use this abbriviation
-            ).ToList();
-
             // Run through all our existing mappings between adresses and CPR numbers
-            AddAddressAndCPRPairsToFile(transactionDataWithOutKont);
+            AddAddressAndCPRPairsToFile(transactionData);
 
             // Summerize the transactions by month
             var transactionsByMonth = transactionData
@@ -65,6 +59,12 @@ namespace HVM_Kasserer
             }
 
             var matchedPersons = new List<MonthlySummaryPerPerson>();
+
+            // Only transactions that are not kontingent
+            //var transactionDataWithOutKont = transactionData.Where(t =>
+            //    !t.Message.Contains("kontingent", StringComparison.OrdinalIgnoreCase) && // We prefer people mark with "kontingent"
+            //    !t.Message.Contains("kont", StringComparison.OrdinalIgnoreCase) // But we've seen that some use this abbriviation
+            //).ToList();
 
             // For each transaction, based on the address and message, find the CPR number from the matches file
             MapTransactionsToCPRNumbers(transactionData, matchedPersons);
