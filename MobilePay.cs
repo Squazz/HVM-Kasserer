@@ -6,9 +6,10 @@ namespace HVM_Kasserer
 {
     class MobilePay
     {
-        string mobilePayFilepath = @"D:\Dropbox\HVM - Kasserer\Indsamlinger\2025 Indsamlinger\transactions-report-1_1_2025-5_14_2025.csv";
-        string excelFilepath = @"D:\Dropbox\HVM - Kasserer\Indsamlinger\2025 Indsamlinger\2025 Mobilepay.xlsx";
-        string exclusionsFilePath = @"D:\Dropbox\HVM - Kasserer\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
+        static string basePath = @"C:\Dropbox\HVM - Kasserer";
+        string mobilePayFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\transactions-report.csv";
+        string excelFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\2025 Mobilepay.xlsx";
+        string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
         
         List<string> mobilePayExclusions;
 
