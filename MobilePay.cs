@@ -11,6 +11,7 @@ namespace HVM_Kasserer
         private const string ColumnHeaderMobil = "Mobil nummer";
         private const string ColumnHeaderArrangementer = "Arrangementer";
         private const string RowValueTotal = "I alt";
+        private const string SheetNameMobilePay = "Mobilepay";
 
         static string basePath = @"C:\Dropbox\HVM - Kasserer";
         string mobilePayFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\transactions-report.csv";
@@ -129,7 +130,7 @@ namespace HVM_Kasserer
                 {
                     Console.WriteLine($"{entry.Year}-{entry.Month:00}: {entry.Person}-{entry.Number} - {entry.Total}");
 
-                    UpdateExcelFile("Mobilepay", entry.Person, entry.Number, monthString, entry.Total);
+                    UpdateExcelFile(SheetNameMobilePay, entry.Person, entry.Number, monthString, entry.Total);
                 }
 
                 Console.WriteLine($"");
@@ -142,7 +143,7 @@ namespace HVM_Kasserer
                 var todaysTotal = date.Select(t => t.Amount).Sum();
                 string dateString = date.Select(x => x.Date).First().ToString("yyyy-MM-dd");
                 string? message = date.Where(x => x.Message != null).Select(x => x.Message).First();
-                UpdateExcelForExcluded("Mobilepay", todaysTotal, dateString, message);
+                UpdateExcelForExcluded(SheetNameMobilePay, todaysTotal, dateString, message);
             }
         }
 
