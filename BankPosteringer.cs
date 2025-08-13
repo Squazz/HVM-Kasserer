@@ -5,9 +5,10 @@ namespace HVM_Kasserer
 {
     class BankPosteringer
     {
-        private string bankPosteringerFilepath = @"C:\Users\kaspe\Downloads\eksport.csv";
+        static string basePath = @"C:\Dropbox\HVM - Kasserer";
 
-        string matchesFilePath = @"C:\Dropbox\HVM - Kasserer\Program-kode\HVM Kasserer\cprToAddressMatches.xlsx";
+        private string bankPosteringerFilepath = basePath + @"\Gaver\2025\eksport.csv";
+        string matchesFilePath = basePath + @"\Program-kode\HVM Kasserer\cprToAddressMatches.xlsx";
 
         List<CprToSenderMatch> cprToSenderMatches;
 
