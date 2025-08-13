@@ -6,6 +6,12 @@ namespace HVM_Kasserer
 {
     class MobilePay
     {
+        private const string Gebyr = "Gebyr";
+        private const string ColumnHeaderFornavne = "Fornavne";
+        private const string ColumnHeaderMobil = "Mobil nummer";
+        private const string ColumnHeaderArrangementer = "Arrangementer";
+        private const string RowValueTotal = "I alt";
+
         static string basePath = @"C:\Dropbox\HVM - Kasserer";
         string mobilePayFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\transactions-report.csv";
         string excelFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\2025 Mobilepay.xlsx";
@@ -50,14 +56,14 @@ namespace HVM_Kasserer
                         Date = group.Key,
                         CombinedTotal = group.Sum(t => t.Amount),
 
-                        RegularDonation = regularTransactions.Where(x => x.Type != "Gebyr").Sum(x => x.Amount),
+                        RegularDonation = regularTransactions.Where(x => x.Type != Gebyr).Sum(x => x.Amount),
                         RegularTotal = regularTransactions.Sum(t => t.Amount),
-                        RegularGebyr = regularTransactions.Where(x => x.Type == "Gebyr").Sum(x => x.Amount) * -1,
+                        RegularGebyr = regularTransactions.Where(x => x.Type == Gebyr).Sum(x => x.Amount) * -1,
                         RegularMessages = string.Join(", ", regularTransactions.Where(t => t.Message != null && t.Message.Length > 0).Select(t => t.Message).Distinct()),
 
-                        ExcludedDonation = excludedTransactions.Where(x => x.Type != "Gebyr").Sum(x => x.Amount),
+                        ExcludedDonation = excludedTransactions.Where(x => x.Type != Gebyr).Sum(x => x.Amount),
                         ExcludedTotal = excludedTransactions.Sum(t => t.Amount),
-                        ExcludedGebyr = excludedTransactions.Where(x => x.Type == "Gebyr").Sum(x => x.Amount) * -1,
+                        ExcludedGebyr = excludedTransactions.Where(x => x.Type == Gebyr).Sum(x => x.Amount) * -1,
                         ExcludedMessages = string.Join(", ", excludedTransactions.Select(t => t.Message).Distinct())
                     };
                 })
@@ -97,7 +103,7 @@ namespace HVM_Kasserer
 
             // Summarize by month for each person (excluding marked transactions)
             var monthlySummary = transactions
-                .Where(t => !t.IsExcluded && t.Type != "Gebyr")
+                .Where(t => !t.IsExcluded && t.Type != Gebyr)
                 .GroupBy(t => new { t.Date.Year, t.Date.Month, t.Name, t.Phone })
                 .Select(group => new MonthlySummary(
                         RearrangeName(group.Key.Name),
@@ -129,7 +135,7 @@ namespace HVM_Kasserer
                 Console.WriteLine($"");
             }
 
-            var excludedTransactions = transactions.Where(t => t.IsExcluded && t.Type != "Gebyr");
+            var excludedTransactions = transactions.Where(t => t.IsExcluded && t.Type != Gebyr);
             var groupedByDay = excludedTransactions.GroupBy(t => t.Date.Date);
             foreach (var date in groupedByDay)
             {
@@ -147,12 +153,12 @@ namespace HVM_Kasserer
             var worksheet = workbook.Worksheet(sheetName);
 
             // Define column indices
-            int nameColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, "Fornavne");
-            int phoneColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, "Mobil nummer");
+            int nameColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderFornavne);
+            int phoneColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderMobil);
 
             if (nameColumnIndex == -1 || phoneColumnIndex == -1)
             {
-                Console.WriteLine("Required columns ('Fornavne' or 'Mobil nummer') not found.");
+                Console.WriteLine($"Required columns ('{ColumnHeaderFornavne}' or '{ColumnHeaderMobil}') not found.");
                 return;
             }
 
@@ -346,12 +352,12 @@ namespace HVM_Kasserer
 
             // Find the row that says "I alt"
             var totalRow = worksheet.RowsUsed()
-                .FirstOrDefault(row => row.CellsUsed().Any(cell => cell.GetValue<string>().Trim().Equals("I alt", StringComparison.OrdinalIgnoreCase)));
+                .FirstOrDefault(row => row.CellsUsed().Any(cell => cell.GetValue<string>().Trim().Equals(RowValueTotal, StringComparison.OrdinalIgnoreCase)));
 
             if (totalRow == null)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("'I alt' row not found.");
+                Console.WriteLine($"'{RowValueTotal}' row not found.");
                 Console.ForegroundColor = ConsoleColor.Gray;
                 return;
             }
@@ -362,13 +368,13 @@ namespace HVM_Kasserer
             var newRow = worksheet.Row(newRowNumber);
 
             // Find the column for "arrangementer"
-            int arrangementerColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, "arrangementer");
-            int fornavneColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, "Fornavne");
+            int arrangementerColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderArrangementer);
+            int fornavneColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderFornavne);
 
             if (arrangementerColumnIndex == -1)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("'arrangementer' column not found.");
+                Console.WriteLine($"'{ColumnHeaderArrangementer}' column not found.");
                 Console.ForegroundColor = ConsoleColor.Gray;
                 return;
             }
@@ -379,7 +385,7 @@ namespace HVM_Kasserer
 
             // Save the workbook
             workbook.Save();
-            Console.WriteLine($"Excluded amount {excludedAmount} added to 'arrangementer' column above 'I alt'.");
+            Console.WriteLine($"Excluded amount {excludedAmount} added to '{ColumnHeaderArrangementer}' column above '{RowValueTotal}'.");
         }
 
         class Transaction
