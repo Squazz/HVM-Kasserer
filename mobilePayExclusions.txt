@@ -4,3 +4,11 @@ frokost
 generalforsamling
 kaffe
 middag
+menigheds
+menighedsdag
+menighedsarbejde
+mrk
+kontigent
+kontingent
+englesang
+tak
