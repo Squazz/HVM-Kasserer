@@ -48,7 +48,7 @@ namespace HVM_Kasserer
 
             // Summarize by day
             var dailySummary = transactions
-                .GroupBy(t => t.Date.Date)
+                .GroupBy(t => GetEffectivePostingDate(t.Date))
                 .Select(group =>
                 {
                     var regularTransactions = group.Where(t => !t.IsExcluded).ToList();
@@ -108,16 +108,22 @@ namespace HVM_Kasserer
             string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
             Directory.CreateDirectory(dailyReportsFolder);
 
-            var transactionsByDay = transactions.GroupBy(t => t.Date.Date);
+            var transactionsByDay = transactions.GroupBy(t => GetEffectivePostingDate(t.Date));
             foreach (var group in transactionsByDay)
             {
                 WriteDailyTransactionsToExcel(group.Key, group.ToList(), dailyReportsFolder);
             }
-
+            
             // Summarize by month for each person (excluding marked transactions)
             var monthlySummary = transactions
                 .Where(t => !t.IsExcluded && t.Type != Gebyr)
-                .GroupBy(t => new { t.Date.Year, t.Date.Month, t.Name, t.Phone })
+                .GroupBy(t => new
+                {
+                    Year = GetEffectivePostingDate(t.Date).Year,
+                    Month = GetEffectivePostingDate(t.Date).Month,
+                    t.Name,
+                    t.Phone
+                })
                 .Select(group => new MonthlySummary(
                         RearrangeName(group.Key.Name),
                         group.Key.Phone,
@@ -148,8 +154,9 @@ namespace HVM_Kasserer
                 Console.WriteLine($"");
             }
 
+            // Replace excluded transactions grouping before UpdateExcelForExcluded
             var excludedTransactions = transactions.Where(t => t.IsExcluded && t.Type != Gebyr);
-            var groupedByDay = excludedTransactions.GroupBy(t => t.Date.Date);
+            var groupedByDay = excludedTransactions.GroupBy(t => GetEffectivePostingDate(t.Date));
             foreach (var date in groupedByDay)
             {
                 var todaysTotal = date.Select(t => t.Amount).Sum();
@@ -470,6 +477,19 @@ namespace HVM_Kasserer
                 Month = month;
                 Total = total;
             }
+        }
+
+        // Add this helper inside the MobilePay class (near other private helpers)
+        private DateTime GetEffectivePostingDate(DateTime dateTime)
+        {
+            // Transactions that hit on Saturday or Sunday should be treated as posted on the following Monday
+            var date = dateTime.Date;
+            return date.DayOfWeek switch
+            {
+                DayOfWeek.Saturday => date.AddDays(2),
+                DayOfWeek.Sunday => date.AddDays(1),
+                _ => date
+            };
         }
     }
 }
