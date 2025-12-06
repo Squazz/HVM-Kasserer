@@ -1,6 +1,7 @@
 ﻿using ClosedXML.Excel;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.IO;
 
 namespace HVM_Kasserer
 {
@@ -14,8 +15,9 @@ namespace HVM_Kasserer
         private const string SheetNameMobilePay = "Mobilepay";
 
         static string basePath = @"C:\Dropbox\HVM - Kasserer";
-        string mobilePayFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\transactions-report.csv";
-        string excelFilepath = basePath + @"\Indsamlinger\2025 Indsamlinger\2025 Mobilepay.xlsx";
+        static string indsamlingerFolder = basePath + @"\Indsamlinger\2025 Indsamlinger";
+        string mobilePayFilepath = indsamlingerFolder + @"\transactions-report.csv";
+        string excelFilepath = indsamlingerFolder + @"\2025 Mobilepay.xlsx";
         string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
         
         List<string> mobilePayExclusions;
@@ -100,6 +102,16 @@ namespace HVM_Kasserer
                     Console.WriteLine($"");
                 }
                 Console.WriteLine($"");
+            }
+
+            // Insert this call in `SummarizeMobilePayTransactions()` after you print the daily summary (before monthly summary)
+            string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
+            Directory.CreateDirectory(dailyReportsFolder);
+
+            var transactionsByDay = transactions.GroupBy(t => t.Date.Date);
+            foreach (var group in transactionsByDay)
+            {
+                WriteDailyTransactionsToExcel(group.Key, group.ToList(), dailyReportsFolder);
             }
 
             // Summarize by month for each person (excluding marked transactions)
@@ -387,6 +399,47 @@ namespace HVM_Kasserer
             // Save the workbook
             workbook.Save();
             Console.WriteLine($"Excluded amount {excludedAmount} added to '{ColumnHeaderArrangementer}' column above '{RowValueTotal}'.");
+        }
+
+        // Add this private helper method inside the MobilePay class
+        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, string outputFolder)
+        {
+            string fileName = $"Mobilepay-{date:yyyy-MM-dd}.xlsx";
+            string filePath = Path.Combine(outputFolder, fileName);
+
+            using var workbook = new XLWorkbook();
+            var ws = workbook.AddWorksheet("Transactions");
+
+            // Headers
+            var headers = new[] { "Date", "Time", "Name", "Phone", "Type", "Amount", "Message", "TransactionID", "Excluded" };
+            for (int i = 0; i < headers.Length; i++)
+                ws.Cell(1, i + 1).Value = headers[i];
+
+            int row = 2;
+            foreach (var t in dayTransactions)
+            {
+                ws.Cell(row, 1).Value = t.Date.ToString("yyyy-MM-dd", CultureInfo.GetCultureInfo("da-DK"));
+                ws.Cell(row, 2).Value = t.Date.ToString("HH:mm:ss");
+                ws.Cell(row, 3).Value = t.Name;
+                ws.Cell(row, 4).Value = t.Phone;
+                ws.Cell(row, 5).Value = t.Type;
+                ws.Cell(row, 6).Value = t.Amount;
+                ws.Cell(row, 7).Value = t.Message;
+                ws.Cell(row, 8).Value = t.TransactionID;
+                ws.Cell(row, 9).Value = t.IsExcluded ? "Yes" : "No";
+                row++;
+            }
+
+            // Sum row
+            ws.Cell(row, 5).Value = "Total";
+            ws.Cell(row, 6).FormulaA1 = $"=SUM(F2:F{row - 1})";
+
+            // Formatting
+            ws.Column(6).Style.NumberFormat.Format = "#,##0.00";
+            ws.Columns().AdjustToContents();
+
+            workbook.SaveAs(filePath);
+            Console.WriteLine($"Saved daily file: {filePath}");
         }
 
         class Transaction
