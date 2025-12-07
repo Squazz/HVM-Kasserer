@@ -19,7 +19,8 @@ namespace HVM_Kasserer
         string mobilePayFilepath = indsamlingerFolder + @"\transactions-report.csv";
         string excelFilepath = indsamlingerFolder + @"\2025 Mobilepay.xlsx";
         string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
-        
+        string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
+
         List<string> mobilePayExclusions;
 
         public MobilePay()
@@ -104,26 +105,19 @@ namespace HVM_Kasserer
                 Console.WriteLine($"");
             }
 
-            // Insert this call in `SummarizeMobilePayTransactions()` after you print the daily summary (before monthly summary)
-            string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
             Directory.CreateDirectory(dailyReportsFolder);
 
-            var transactionsByDay = transactions.GroupBy(t => GetEffectivePostingDate(t.Date));
+            var transactionsByDay = transactions.GroupBy(t => new { PostingDateTime = GetEffectivePostingDate(t.Date), t.Date.DayOfYear});
             foreach (var group in transactionsByDay)
             {
-                WriteDailyTransactionsToExcel(group.Key, group.ToList(), dailyReportsFolder);
+                bool multipleTransactions = transactionsByDay.Where(g => g.Key.PostingDateTime == group.Key.PostingDateTime).Count() > 1;
+                WriteDailyTransactionsToExcel(group.Key.PostingDateTime, group.ToList(), multipleTransactions);
             }
             
             // Summarize by month for each person (excluding marked transactions)
             var monthlySummary = transactions
                 .Where(t => !t.IsExcluded && t.Type != Gebyr)
-                .GroupBy(t => new
-                {
-                    Year = GetEffectivePostingDate(t.Date).Year,
-                    Month = GetEffectivePostingDate(t.Date).Month,
-                    t.Name,
-                    t.Phone
-                })
+                .GroupBy(t => new { t.Date.Year, t.Date.Month, t.Name, t.Phone })
                 .Select(group => new MonthlySummary(
                         RearrangeName(group.Key.Name),
                         group.Key.Phone,
@@ -408,17 +402,28 @@ namespace HVM_Kasserer
             Console.WriteLine($"Excluded amount {excludedAmount} added to '{ColumnHeaderArrangementer}' column above '{RowValueTotal}'.");
         }
 
-        // Add this private helper method inside the MobilePay class
-        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, string outputFolder)
+        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, bool multipleFiles)
         {
-            string fileName = $"Mobilepay-{date:yyyy-MM-dd}.xlsx";
-            string filePath = Path.Combine(outputFolder, fileName);
+            string fileName = $"Mobilepay-{date:yyyy-MM-dd}";
+
+            if (multipleFiles)
+            {
+                var sum = Math.Floor(dayTransactions.Sum(t => t.Amount));
+                fileName = fileName + $"-{sum}";
+            }
+
+            if (dayTransactions.Any(dayTransactions => dayTransactions.IsExcluded))
+                fileName = fileName + "-hasExcluded";
+
+            var fullFileName = fileName + ".xlsx";
+
+            string filePath = Path.Combine(dailyReportsFolder, fullFileName);
 
             using var workbook = new XLWorkbook();
             var ws = workbook.AddWorksheet("Transactions");
 
             // Headers
-            var headers = new[] { "Date", "Time", "Name", "Phone", "Type", "Amount", "Message", "TransactionID", "Excluded" };
+            var headers = new[] { "Date", "Time", "Name", "Phone", "Type", "Amount", "Message", "TransactionID", "Gift" };
             for (int i = 0; i < headers.Length; i++)
                 ws.Cell(1, i + 1).Value = headers[i];
 
@@ -433,7 +438,7 @@ namespace HVM_Kasserer
                 ws.Cell(row, 6).Value = t.Amount;
                 ws.Cell(row, 7).Value = t.Message;
                 ws.Cell(row, 8).Value = t.TransactionID;
-                ws.Cell(row, 9).Value = t.IsExcluded ? "Yes" : "No";
+                ws.Cell(row, 9).Value = t.IsExcluded ? "No" : "Yes";
                 row++;
             }
 
@@ -482,13 +487,13 @@ namespace HVM_Kasserer
         // Add this helper inside the MobilePay class (near other private helpers)
         private DateTime GetEffectivePostingDate(DateTime dateTime)
         {
-            // Transactions that hit on Saturday or Sunday should be treated as posted on the following Monday
+            // Transactions that hit on Friday, Saturday or Sunday should be treated as posted on the following Monday
             var date = dateTime.Date;
             return date.DayOfWeek switch
             {
+                DayOfWeek.Friday => date.AddDays(3),
                 DayOfWeek.Saturday => date.AddDays(2),
-                DayOfWeek.Sunday => date.AddDays(1),
-                _ => date
+                _ => date.AddDays(1)
             };
         }
     }
