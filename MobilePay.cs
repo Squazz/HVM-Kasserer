@@ -401,11 +401,6 @@ namespace HVM_Kasserer
                 return;
             }
 
-            // Insert a new row above the "I alt" row
-            int newRowNumber = totalRow.RowNumber();
-            worksheet.Row(newRowNumber).InsertRowsAbove(1);
-            var newRow = worksheet.Row(newRowNumber);
-
             // Find the column for "arrangementer"
             int arrangementerColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderArrangementer);
             int fornavneColumnIndex = ExcelHelperMethods.GetColumnIndex(worksheet, ColumnHeaderFornavne);
@@ -418,9 +413,53 @@ namespace HVM_Kasserer
                 return;
             }
 
+            if (fornavneColumnIndex == -1)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"'{ColumnHeaderFornavne}' column not found.");
+                Console.ForegroundColor = ConsoleColor.Gray;
+                return;
+            }
+
+            // Prepare the text we expect to find in the Fornavne column for this excluded entry
+            string targetText = $"{date} - {messages ?? string.Empty}".Trim();
+
+            // Check existing rows above the totalRow to avoid adding duplicates
+            var rowsAbove = worksheet.RowsUsed().Where(r => r.RowNumber() < totalRow.RowNumber());
+            foreach (var row in rowsAbove)
+            {
+                var nameCellText = row.Cell(fornavneColumnIndex).GetValue<string>()?.Trim() ?? string.Empty;
+                if (!NormalizeString(nameCellText).Equals(NormalizeString(targetText), StringComparison.Ordinal))
+                    continue;
+
+                // Try to read the amount cell as a double; if it can't be parsed skip this row
+                double cellAmount;
+                try
+                {
+                    cellAmount = row.Cell(arrangementerColumnIndex).GetValue<double>();
+                }
+                catch
+                {
+                    continue;
+                }
+
+                if (Math.Abs(cellAmount - (double)excludedAmount) < 0.005)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"Excluded transaction already present for {date} with amount {excludedAmount}. Skipping insertion.");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    return;
+                }
+            }
+
+            // Insert a new row above the "I alt" row
+            int newRowNumber = totalRow.RowNumber();
+            worksheet.Row(newRowNumber).InsertRowsAbove(1);
+            var newRow = worksheet.Row(newRowNumber);
+
             // Add the excluded amount to the new row
             newRow.Cell(arrangementerColumnIndex).Value = excludedAmount;
-            newRow.Cell(fornavneColumnIndex).Value = $"{date} - {messages}";
+            newRow.Cell(fornavneColumnIndex).Value = targetText;
 
             // Save the workbook
             workbook.Save();
