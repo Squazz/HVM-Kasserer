@@ -243,10 +243,35 @@ namespace HVM_Kasserer
 
             if (personRow == null)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"No matching person found. Looking for phone {last4PhoneDigits} and name {name}");
+                // Find the last row that contains a value in the phone column and insert a new row after it.
+                var rowsWithPhone = worksheet.RowsUsed()
+                    .Where(r => !string.IsNullOrWhiteSpace(r.Cell(phoneColumnIndex).GetValue<string>()))
+                    .ToList();
+
+                int insertRowNumber;
+                if (rowsWithPhone.Any())
+                {
+                    insertRowNumber = rowsWithPhone.Max(r => r.RowNumber()) + 1;
+                }
+                else
+                {
+                    // If no rows have a phone value, insert after the header (or at row 2 if the sheet is empty)
+                    var headerRow = worksheet.FirstRowUsed();
+                    insertRowNumber = (headerRow?.RowNumber() ?? 1) + 1;
+                }
+
+                // Insert a new row at the calculated position
+                worksheet.Row(insertRowNumber).InsertRowsAbove(1);
+                var newRow = worksheet.Row(insertRowNumber);
+
+                newRow.Cell(nameColumnIndex).Value = name;
+                newRow.Cell(phoneColumnIndex).Value = last4PhoneDigits;
+
+                personRow = newRow;
+
+                Console.ForegroundColor = ConsoleColor.Green;
+                Console.WriteLine($"Added new person: {name} (phone: {last4PhoneDigits}) at row {insertRowNumber}.");
                 Console.ForegroundColor = ConsoleColor.Gray;
-                return;
             }
 
             // Find the column for the month
