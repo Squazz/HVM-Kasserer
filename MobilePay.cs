@@ -2,6 +2,9 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.IO;
+using QuestPDF.Fluent;
+using QuestPDF.Infrastructure;
+using QuestPDF.Helpers;
 
 namespace HVM_Kasserer
 {
@@ -26,6 +29,7 @@ namespace HVM_Kasserer
         public MobilePay()
         {
             mobilePayExclusions = LoadExclusionsFromFile();
+            QuestPDF.Settings.License = LicenseType.Community;
         }
 
         public void SummarizeMobilePayTransactions()
@@ -487,7 +491,7 @@ namespace HVM_Kasserer
             var ws = workbook.AddWorksheet("Transactions");
 
             // Headers
-            var headers = new[] { "Date", "Time", "Name", "Phone", "Type", "Amount", "Message", "TransactionID", "Gift" };
+            var headers = new[] { "Date", "Time", "Name", "Phone", "Type", "Amount", "Message", "TransactionID", "Donation" };
             for (int i = 0; i < headers.Length; i++)
                 ws.Cell(1, i + 1).Value = headers[i];
 
@@ -510,12 +514,122 @@ namespace HVM_Kasserer
             ws.Cell(row, 5).Value = "Total";
             ws.Cell(row, 6).FormulaA1 = $"=SUM(F2:F{row - 1})";
 
+            ws.Cell(row + 1, 5).Value = "Gebyr";
+            ws.Cell(row + 1, 6).FormulaA1 = $"=SUMIF(E2:E{row - 1},\"Gebyr\",F2:F{row - 1})";
+
+            ws.Cell(row + 2, 5).Value = "Betaling";
+            ws.Cell(row + 2, 6).FormulaA1 = $"=SUMIF(E2:E{row - 1},\"Betaling\",F2:F{row - 1})";
+
             // Formatting
             ws.Column(6).Style.NumberFormat.Format = "#,##0.00";
             ws.Columns().AdjustToContents();
 
             workbook.SaveAs(filePath);
             Console.WriteLine($"Saved daily file: {filePath}");
+
+            // Also generate PDF version of the same daily report
+            try
+            {
+                WriteDailyTransactionsToPdf(date, dayTransactions, fileName);
+            }
+            catch (Exception ex)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Failed to generate PDF for {filePath}: {ex.Message}");
+                Console.ForegroundColor = ConsoleColor.Gray;
+            }
+        }
+
+        private void WriteDailyTransactionsToPdf(DateTime date, List<Transaction> dayTransactions, string baseFileName)
+        {
+            // Ensure output folder exists
+            Directory.CreateDirectory(dailyReportsFolder);
+
+            string pdfFilePath = Path.Combine(dailyReportsFolder, baseFileName + ".pdf");
+
+            // Create a simple, well-formatted PDF using QuestPDF.
+            Document.Create(container =>
+            {
+                container.Page(page =>
+                {
+                    page.Size(PageSizes.A4);
+                    page.Margin(20);
+                    page.PageColor(Colors.White);
+                    page.DefaultTextStyle(x => x.FontSize(10));
+
+                    page.Header()
+                        .Row(row =>
+                        {
+                            row.RelativeItem().Text($"MobilePay transactions - {date:yyyy-MM-dd}").FontSize(14).SemiBold();
+                            //row.ConstantItem(120).AlignRight().Text($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}").FontSize(9);
+                        });
+
+                    page.Content()
+                        .PaddingTop(10)
+                        .Column(column =>
+                        {
+                            // Table header
+                            column.Item().Row(headerRow =>
+                            {
+                                headerRow.ConstantItem(80).Text("Date").SemiBold();
+                                headerRow.ConstantItem(50).Text("Time").SemiBold();
+                                headerRow.RelativeItem().Text("Name").SemiBold();
+                                headerRow.ConstantItem(60).Text("Phone").SemiBold();
+                                headerRow.ConstantItem(60).Text("Type").SemiBold();
+                                headerRow.ConstantItem(60).AlignRight().Text("Amount").SemiBold();
+                            });
+
+                            column.Item().LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+
+                            // Rows
+                            foreach (var t in dayTransactions)
+                            {
+                                column.Item().PaddingVertical(3).Row(r =>
+                                {
+                                    r.ConstantItem(80).Text(t.Date.ToString("yyyy-MM-dd"));
+                                    r.ConstantItem(50).Text(t.Date.ToString("HH:mm:ss"));
+                                    r.RelativeItem().Text(t.Name);
+                                    r.ConstantItem(60).Text(t.Phone);
+                                    r.ConstantItem(60).Text(t.Type);
+                                    r.ConstantItem(60).AlignRight().Text(t.Amount.ToString("#,##0.00", CultureInfo.GetCultureInfo("da-DK")));
+                                });
+
+                                // Optionally show message on its own line if present
+                                if (!string.IsNullOrWhiteSpace(t.Message))
+                                {
+                                    column.Item().PaddingLeft(140).Text($"Message: {t.Message}").FontSize(9).FontColor(Colors.Grey.Darken1);
+                                }
+                            }
+
+                            column.Item().PaddingTop(8).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+
+                            // Totals
+                            var total = dayTransactions.Sum(x => x.Amount);
+                            var gebyr = dayTransactions.Where(x => x.Type == "Gebyr").Sum(x => x.Amount);
+                            var donation = dayTransactions.Where(x => x.Type == "Betaling").Sum(x => x.Amount);
+                            column.Item().PaddingTop(6).Row(totRow =>
+                            {
+                                totRow.RelativeItem();
+                                totRow.ConstantItem(120).AlignRight().Text($"Betaling: {donation.ToString("#,##0.00", CultureInfo.GetCultureInfo("da-DK"))}").SemiBold();
+                                totRow.ConstantItem(120).AlignRight().Text($"Gebyr: {gebyr.ToString("#,##0.00", CultureInfo.GetCultureInfo("da-DK"))}").SemiBold();
+                                totRow.ConstantItem(120).AlignRight().Text($"Total: {total.ToString("#,##0.00", CultureInfo.GetCultureInfo("da-DK"))}").SemiBold();
+                            });
+                        });
+
+                    page.Footer()
+                        .AlignCenter()
+                        .Text(txt =>
+                        {
+                            txt.Span("Page ");
+                            txt.CurrentPageNumber();
+                            txt.Span(" / ");
+                            txt.TotalPages();
+                        });
+                });
+            })
+            .GeneratePdf(pdfFilePath);
+
+            Console.WriteLine($"Saved daily PDF: {pdfFilePath}");
         }
 
         class Transaction
