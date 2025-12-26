@@ -17,10 +17,12 @@ namespace HVM_Kasserer
         private const string RowValueTotal = "I alt";
         private const string SheetNameMobilePay = "Mobilepay";
 
-        static string basePath = @"C:\Dropbox\HVM - Kasserer";
+        static string basePath = @"C:\Dropbox\HVM - Kasserer"; // Desktop
+        //static string basePath = @"C:\Users\kaspe\Dropbox\HVM - Kasserer"; // Laptop
         static string indsamlingerFolder = basePath + @"\Indsamlinger\2025 Indsamlinger";
         string mobilePayFilepath = indsamlingerFolder + @"\transactions-report.csv";
         string excelFilepath = indsamlingerFolder + @"\2025 Mobilepay.xlsx";
+        string indsamlingsExcel = indsamlingerFolder + @"\2025 Indsamlings Oversigt - MP + Kirke - NEW.xlsx";
         string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
         string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
 
@@ -53,7 +55,7 @@ namespace HVM_Kasserer
 
             // Summarize by day
             var dailySummary = transactions
-                .GroupBy(t => GetEffectivePostingDate(t.Date))
+                .GroupBy(t => t.Date.Date)
                 .Select(group =>
                 {
                     var regularTransactions = group.Where(t => !t.IsExcluded).ToList();
@@ -96,6 +98,8 @@ namespace HVM_Kasserer
                     Console.WriteLine($"  Regular Total: {day.RegularTotal}");
                     Console.WriteLine($"  Regular Messages: {day.RegularMessages}");
                     Console.WriteLine($"");
+
+                    UpdateIndsamlingsOversigt(day.Date, day.RegularDonation, day.RegularGebyr, day.RegularTotal, day.RegularMessages);
                 }
 
                 if (day.ExcludedTotal > 0)
@@ -630,6 +634,146 @@ namespace HVM_Kasserer
             .GeneratePdf(pdfFilePath);
 
             Console.WriteLine($"Saved daily PDF: {pdfFilePath}");
+        }
+
+        // New: update the summary workbook "2025 Indsamlings Oversigt - MP + Kirke - NEW.xlsx"
+        // Sheet: "Indsamlinger"
+        // Columns: A = Date, C = Regular, D = Regular Gebyr, E = RegularTotal
+        // Insert new row at line 2 (below header) so we don't overwrite existing rows below.
+        private void UpdateIndsamlingsOversigt(DateTime date, decimal regularDonation, decimal regularGebyr, decimal regularTotal, string notes)
+        {
+            var summaryFilePath = Path.Combine(indsamlingerFolder, indsamlingsExcel);
+            var sheetName = "Indsamlinger";
+
+            if (!File.Exists(summaryFilePath))
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Summary workbook not found: {summaryFilePath}");
+                Console.ForegroundColor = ConsoleColor.Gray;
+                return;
+            }
+
+            using var workbook = new XLWorkbook(summaryFilePath);
+            var worksheet = workbook.Worksheets.FirstOrDefault(ws => ws.Name.Equals(sheetName, StringComparison.OrdinalIgnoreCase));
+            if (worksheet == null)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Worksheet '{sheetName}' not found in {indsamlingsExcel}");
+                Console.ForegroundColor = ConsoleColor.Gray;
+                return;
+            }
+
+            const int dateCol = 1;      // A
+            const int regularCol = 3;   // C
+            const int gebyrCol = 4;     // D
+            const int totalCol = 5;     // E
+            const int sumCol = 7;       // G
+            const int notesCol = 10;    // G
+
+            // Check for existing entry (match date and regularDonation)
+            var usedRows = worksheet.RowsUsed()?.Where(r => r.RowNumber() >= 2).ToList() ?? new List<IXLRow>();
+            foreach (var row in usedRows)
+            {
+                bool dateMatches = false;
+                // Try cell as DateTime
+                var dateCell = row.Cell(dateCol);
+                if (dateCell.DataType == XLDataType.DateTime)
+                {
+                    try
+                    {
+                        var existingDate = dateCell.GetDateTime();
+                        dateMatches = existingDate.Date == date.Date;
+                    }
+                    catch { /* ignore parse errors */ }
+                }
+                else
+                {
+                    var text = dateCell.GetValue<string>()?.Trim();
+                    if (!string.IsNullOrEmpty(text) && DateTime.TryParse(text, CultureInfo.GetCultureInfo("da-DK"), DateTimeStyles.None, out var parsed))
+                    {
+                        dateMatches = parsed.Date == date.Date;
+                    }
+                    else if (!string.IsNullOrEmpty(text) && DateTime.TryParse(text, out parsed))
+                    {
+                        dateMatches = parsed.Date == date.Date;
+                    }
+                }
+
+                if (!dateMatches)
+                    continue;
+
+                // Compare regular donation value
+                decimal existingRegular = 0;
+                var regCell = row.Cell(regularCol);
+                try
+                {
+                    if (regCell.DataType == XLDataType.Number)
+                    {
+                        existingRegular = Convert.ToDecimal(regCell.GetDouble());
+                    }
+                    else
+                    {
+                        var txt = regCell.GetValue<string>()?.Trim() ?? string.Empty;
+                        decimal.TryParse(txt, NumberStyles.Any, CultureInfo.GetCultureInfo("da-DK"), out existingRegular);
+                    }
+                }
+                catch
+                {
+                    // ignore parse errors and continue searching
+                    continue;
+                }
+
+                if (Math.Abs(existingRegular - regularDonation) < 0.005m)
+                {
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.WriteLine($"Summary already contains entry for {date:yyyy-MM-dd} with Regular={regularDonation}. Skipping insertion.");
+                    Console.ForegroundColor = ConsoleColor.Gray;
+                    return;
+                }
+            }
+
+            // Determine target row:
+            // -Start at row 2.
+            // - If there is an empty Date cell at or after row 2, use the first empty row.
+            // - Otherwise append after the last used row (safe append).
+            int lastUsedRow = worksheet.LastRowUsed()?.RowNumber() ?? 1;
+            int targetRow = -1;
+            for (int r = 2; r <= lastUsedRow; r++)
+            {
+                var cellText = worksheet.Cell(r, dateCol).GetValue<string>()?.Trim();
+                if (string.IsNullOrEmpty(cellText))
+                {
+                    targetRow = r;
+                    break;
+                }
+            }
+
+            if (targetRow == -1)
+            {
+                // No empty row found in the reserved area -> append after last used row
+                targetRow = Math.Max(2, lastUsedRow + 1);
+            }
+
+            // Write values without shifting existing rows (keeps rows below intact)
+            worksheet.Cell(targetRow, dateCol).Value = date;
+            worksheet.Cell(targetRow, regularCol).Value = regularDonation;
+            worksheet.Cell(targetRow, gebyrCol).Value = regularGebyr;
+            worksheet.Cell(targetRow, totalCol).Value = regularTotal;
+            worksheet.Cell(targetRow, notesCol).Value = notes;
+
+            // Put a per-row SUM(C:E) into column G for the written row
+            worksheet.Cell(targetRow, sumCol).FormulaA1 = $"=SUM(D{targetRow}:F{targetRow})";
+
+            // Format cells
+            worksheet.Cell(targetRow, dateCol).Style.DateFormat.Format = "yyyy-mm-dd";
+            worksheet.Cell(targetRow, regularCol).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(targetRow, gebyrCol).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(targetRow, totalCol).Style.NumberFormat.Format = "#,##0.00";
+            worksheet.Cell(targetRow, sumCol).Style.NumberFormat.Format = "#,##0.00";
+
+            // Save and report
+            workbook.Save();
+            Console.WriteLine($"Inserted summary row for {date:yyyy-MM-dd} into '{indsamlingsExcel}'.");
         }
 
         class Transaction
