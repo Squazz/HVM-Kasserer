@@ -762,7 +762,7 @@ namespace HVM_Kasserer
             worksheet.Cell(targetRow, notesCol).Value = notes;
 
             // Put a per-row SUM(C:E) into column G for the written row
-            worksheet.Cell(targetRow, sumCol).FormulaA1 = $"=SUM(D{targetRow}:F{targetRow})";
+            worksheet.Cell(targetRow, sumCol).FormulaA1 = $"=SUM(E{targetRow}:F{targetRow})";
 
             // Format cells
             worksheet.Cell(targetRow, dateCol).Style.DateFormat.Format = "yyyy-mm-dd";
