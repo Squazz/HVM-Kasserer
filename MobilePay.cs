@@ -8,7 +8,7 @@ using QuestPDF.Helpers;
 
 namespace HVM_Kasserer
 {
-    class MobilePay
+    internal class MobilePay
     {
         private const string Gebyr = "Gebyr";
         private const string ColumnHeaderFornavne = "Fornavne";

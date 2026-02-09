@@ -1,7 +1,6 @@
-﻿
-namespace HVM_Kasserer
+﻿namespace HVM_Kasserer
 {
-    class HelperMethods
+    internal class HelperMethods
     {
         public static string ExtractLast4Digits(string phoneNumber)
         {
