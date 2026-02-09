@@ -377,7 +377,9 @@ namespace HVM_Kasserer
 
         private string RearrangeName(string fullName)
         {
-            var nameParts = fullName.Split(' ');
+            // Normalize the input: trim and replace multiple spaces with single space
+            var normalized = Regex.Replace(fullName.Trim(), @"\s+", " ");
+            var nameParts = normalized.Split(' ');
 
             if (nameParts.Length > 1)
             {
@@ -388,7 +390,7 @@ namespace HVM_Kasserer
                 return $"{lastName}, {firstNameAndMiddleNames}";
             }
 
-            return fullName; // Returner navnet uændret, hvis det kun består af et enkelt ord
+            return normalized; // Returner navnet uændret, hvis det kun består af et enkelt ord
         }
 
         // Method to insert excluded transactions above the "I alt" line
