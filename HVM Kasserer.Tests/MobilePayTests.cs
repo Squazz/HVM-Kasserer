@@ -12,13 +12,15 @@ namespace HVM_Kasserer_Tests
     /// Unit tests for MobilePay class focusing on outside-in (behavioral) testing.
     /// Tests verify business requirements and integration points rather than implementation details.
     /// </summary>
-    public class MobilePayTests
+    public class MobilePayTests : IDisposable
     {
-        private readonly string _testDataDirectory = Path.Combine(Path.GetTempPath(), "MobilePayTests");
+        private readonly string _testDataDirectory;
         private readonly string _testExcelDirectory;
 
         public MobilePayTests()
         {
+            // Use a unique directory for each test instance to avoid race conditions
+            _testDataDirectory = Path.Combine(Path.GetTempPath(), "MobilePayTests", Guid.NewGuid().ToString());
             _testExcelDirectory = Path.Combine(_testDataDirectory, "Indsamlinger", "2025 Indsamlinger");
             Directory.CreateDirectory(_testExcelDirectory);
         }
@@ -516,7 +518,7 @@ namespace HVM_Kasserer_Tests
 
         #region Cleanup
 
-        ~MobilePayTests()
+        public void Dispose()
         {
             try
             {

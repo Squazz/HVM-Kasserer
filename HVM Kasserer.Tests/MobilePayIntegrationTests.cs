@@ -11,12 +11,14 @@ namespace HVM_Kasserer_Tests
     /// Advanced integration and behavioral tests for MobilePay.
     /// These tests focus on complex business scenarios and interactions between components.
     /// </summary>
-    public class MobilePayIntegrationTests
+    public class MobilePayIntegrationTests : IDisposable
     {
-        private readonly string _testDataDirectory = Path.Combine(Path.GetTempPath(), "MobilePayIntTests");
+        private readonly string _testDataDirectory;
 
         public MobilePayIntegrationTests()
         {
+            // Use a unique directory for each test instance to avoid race conditions
+            _testDataDirectory = Path.Combine(Path.GetTempPath(), "MobilePayIntTests", Guid.NewGuid().ToString());
             Directory.CreateDirectory(_testDataDirectory);
         }
 
@@ -340,7 +342,7 @@ namespace HVM_Kasserer_Tests
 
         #region Cleanup
 
-        ~MobilePayIntegrationTests()
+        public void Dispose()
         {
             try
             {
