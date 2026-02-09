@@ -424,8 +424,8 @@ namespace HVM_Kasserer_Tests
             {
                 // Header row (must match the CSV format)
                 new[] { "", "", "", "", "", "Type", "Amount", "", "", "", "Date", "Message", "", "", "TransactionID", "Name", "Phone" },
-                new[] { "", "", "", "", "", "Betaling", "100.00", "", "", "", "2025-01-15", "Donation", "", "", "TXN001", "John Smith", "+45 1234 5678" },
-                new[] { "", "", "", "", "", "Gebyr", "-5.00", "", "", "", "2025-01-15", "", "", "", "TXN002", "John Smith", "+45 1234 5678" }
+                new[] { "", "", "", "", "", "Betaling", "100,00", "", "", "", "2025-01-15", "Donation", "", "", "TXN001", "John Smith", "+45 1234 5678" },
+                new[] { "", "", "", "", "", "Gebyr", "-5,00", "", "", "", "2025-01-15", "", "", "", "TXN002", "John Smith", "+45 1234 5678" }
             };
 
             CreateTestCsvFile("transactions-report.csv", csvRows);
@@ -433,31 +433,36 @@ namespace HVM_Kasserer_Tests
             var mobilePay = new MobilePayTestHelper();
 
             // Act
-            dynamic transactionsDynamic = mobilePay.CallGetTransactions(
+            var transactionsResult = mobilePay.CallGetTransactions(
                 Path.Combine(_testExcelDirectory, "transactions-report.csv"));
             
-            // Convert dynamic to list for LINQ operations
-            var transactions = ((System.Collections.IEnumerable)transactionsDynamic).Cast<dynamic>().ToList();
+            // Convert the result to a list we can work with
+            var transactions = new List<dynamic>();
+            if (transactionsResult is System.Collections.IEnumerable enumerable)
+            {
+                foreach (var item in enumerable)
+                {
+                    transactions.Add(item);
+                }
+            }
 
             // Assert
             Assert.NotEmpty(transactions);
+            Assert.Equal(2, transactions.Count);
             
-            // Find donation and fee using dynamic objects
-            dynamic donation = null;
-            dynamic fee = null;
+            // Access properties using reflection since dynamic binding doesn't work with private types
+            var firstTransaction = transactions[0];
+            var firstType = firstTransaction.GetType().GetProperty("Type")?.GetValue(firstTransaction);
+            var firstAmount = firstTransaction.GetType().GetProperty("Amount")?.GetValue(firstTransaction);
             
-            foreach (var t in transactions)
-            {
-                if (t.Type == "Betaling" && donation == null)
-                    donation = t;
-                if (t.Type == "Gebyr" && fee == null)
-                    fee = t;
-            }
+            var secondTransaction = transactions[1];
+            var secondType = secondTransaction.GetType().GetProperty("Type")?.GetValue(secondTransaction);
+            var secondAmount = secondTransaction.GetType().GetProperty("Amount")?.GetValue(secondTransaction);
 
-            Assert.NotNull(donation);
-            Assert.NotNull(fee);
-            Assert.Equal(100.00m, (decimal)donation.Amount);
-            Assert.Equal(-5.00m, (decimal)fee.Amount);
+            Assert.Equal("Betaling", firstType);
+            Assert.Equal(100.00m, firstAmount);
+            Assert.Equal("Gebyr", secondType);
+            Assert.Equal(-5.00m, secondAmount);
         }
 
         #endregion

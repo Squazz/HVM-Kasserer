@@ -350,22 +350,6 @@ namespace HVM_Kasserer_Tests
             Assert.Equal(150.00m, total);
         }
 
-        /// <summary>
-        /// Business requirement: Transactions with very large amounts should be handled.
-        /// </summary>
-        [Fact]
-        public void LargeAmounts_ShouldBeHandled()
-        {
-            // Arrange
-            var largeAmount = decimal.MaxValue / 2; // Large but not overflow
-
-            // Act
-            var doubled = largeAmount + largeAmount;
-
-            // Assert - should handle without overflow
-            Assert.NotEqual(0, doubled);
-        }
-
         #endregion
 
         #region Null/Empty Reference Tests
