@@ -12,3 +12,6 @@ menighedsarbejde
 mrk
 kontigent
 kontingent
+koncert
+entre
+måltid

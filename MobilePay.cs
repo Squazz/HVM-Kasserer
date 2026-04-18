@@ -47,6 +47,28 @@ namespace HVM_Kasserer
                 .Distinct()
                 .ToHashSet();
 
+            // --- Expanded exclusion logic for concert days ---
+            // Find all transactions with 'koncert' in the message
+            var koncertTransactions = transactions
+                .Where(t => t.Message != null && NormalizeString(t.Message).Contains("koncert"))
+                .ToList();
+
+            foreach (var koncertTx in koncertTransactions)
+            {
+                var day = koncertTx.Date.Date;
+                var windowStart = koncertTx.Date.AddHours(-2);
+                var windowEnd = koncertTx.Date.AddHours(2);
+                var toExclude = transactions.Where(t =>
+                    t.Date.Date == day &&
+                    string.IsNullOrWhiteSpace(t.Message) &&
+                    t.Date >= windowStart && t.Date <= windowEnd
+                );
+                foreach (var tx in toExclude)
+                {
+                    excludedTransactionIDs.Add(tx.TransactionID);
+                }
+            }
+
             // Mark transactions as "excluded" or "regular"
             foreach (var transaction in transactions)
             {
