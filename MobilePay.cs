@@ -19,12 +19,13 @@ namespace HVM_Kasserer
 
         static string basePath = @"C:\Dropbox\HVM - Kasserer"; // Desktop
         //static string basePath = @"C:\Users\kaspe\Dropbox\HVM - Kasserer"; // Laptop
-        static string indsamlingerFolder = basePath + @"\Indsamlinger\2025 Indsamlinger";
-        string mobilePayFilepath = indsamlingerFolder + @"\transactions-report.csv";
-        string excelFilepath = indsamlingerFolder + @"\2025 Mobilepay.xlsx";
-        string indsamlingsExcel = indsamlingerFolder + @"\2025 Indsamlings Oversigt - MP + Kirke - NEW.xlsx";
-        string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
+        static string indsamlingerFolder = basePath + @"\Indsamlinger\2026 Indsamlinger";
         string dailyReportsFolder = Path.Combine(indsamlingerFolder, "DailyReports");
+
+        string mobilePayFilepath = indsamlingerFolder + @"\transactions-report.csv";
+        string excelFilepath = indsamlingerFolder + @"\Mobilepay.xlsx";
+        string indsamlingsExcel = indsamlingerFolder + @"\Indsamlings Oversigt - MP + Kirke.xlsx";
+        string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
 
         List<string> mobilePayExclusions;
 
@@ -638,7 +639,7 @@ namespace HVM_Kasserer
             Console.WriteLine($"Saved daily PDF: {pdfFilePath}");
         }
 
-        // New: update the summary workbook "2025 Indsamlings Oversigt - MP + Kirke - NEW.xlsx"
+        // Update the summary workbook "Indsamlings Oversigt - MP + Kirke.xlsx"
         // Sheet: "Indsamlinger"
         // Columns: A = Date, C = Regular, D = Regular Gebyr, E = RegularTotal
         // Insert new row at line 2 (below header) so we don't overwrite existing rows below.
