@@ -693,7 +693,7 @@ namespace HVM_Kasserer
             const int gebyrCol = 4;     // D
             const int totalCol = 5;     // E
             const int sumCol = 7;       // G
-            const int notesCol = 10;    // G
+            const int notesCol = 10;    // J
 
             // Check for existing entry (match date and regularDonation)
             var usedRows = worksheet.RowsUsed()?.Where(r => r.RowNumber() >= 2).ToList() ?? new List<IXLRow>();
