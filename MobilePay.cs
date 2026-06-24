@@ -141,8 +141,20 @@ namespace HVM_Kasserer
             var transactionsByDay = transactions.GroupBy(t => new { PostingDateTime = GetEffectivePostingDate(t.Date), t.Date.DayOfYear});
             foreach (var group in transactionsByDay)
             {
-                bool multipleTransactions = transactionsByDay.Where(g => g.Key.PostingDateTime == group.Key.PostingDateTime).Count() > 1;
-                WriteDailyTransactionsToExcel(group.Key.PostingDateTime, group.ToList(), multipleTransactions);
+                var regularTxns = group.Where(t => !t.IsExcluded).ToList();
+                var excludedTxns = group.Where(t => t.IsExcluded).ToList();
+
+                // Create separate reports for regular and excluded transactions
+                bool multipleRegular = regularTxns.Count > 0 && excludedTxns.Count > 0;
+                if (regularTxns.Count > 0)
+                {
+                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, regularTxns, multipleRegular, false);
+                }
+
+                if (excludedTxns.Count > 0)
+                {
+                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, excludedTxns, multipleRegular, true);
+                }
             }
             
             // Summarize by month for each person (excluding marked transactions)
@@ -499,7 +511,7 @@ namespace HVM_Kasserer
             Console.WriteLine($"Excluded amount {excludedAmount} added to '{ColumnHeaderArrangementer}' column above '{RowValueTotal}'.");
         }
 
-        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, bool multipleFiles)
+        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, bool multipleFiles, bool isExcluded)
         {
             string fileName = $"Mobilepay-{date:yyyy-MM-dd}";
 
@@ -509,8 +521,10 @@ namespace HVM_Kasserer
                 fileName = fileName + $"-{sum}";
             }
 
-            if (dayTransactions.Any(dayTransactions => dayTransactions.IsExcluded))
-                fileName = fileName + "-hasExcluded";
+            if (isExcluded)
+                fileName = fileName + "-excluded";
+            else
+                fileName = fileName + "-donations";
 
             var fullFileName = fileName + ".xlsx";
 
