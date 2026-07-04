@@ -145,15 +145,22 @@ namespace HVM_Kasserer
                 var excludedTxns = group.Where(t => t.IsExcluded).ToList();
 
                 // Create separate reports for regular and excluded transactions
-                bool multipleRegular = regularTxns.Count > 0 && excludedTxns.Count > 0;
+                bool hasBoth = regularTxns.Count > 0 && excludedTxns.Count > 0;
+
+                // If both exist, create a combined report first
+                if (hasBoth)
+                {
+                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, group.ToList(), false, null);
+                }
+
                 if (regularTxns.Count > 0)
                 {
-                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, regularTxns, multipleRegular, false);
+                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, regularTxns, hasBoth, false);
                 }
 
                 if (excludedTxns.Count > 0)
                 {
-                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, excludedTxns, multipleRegular, true);
+                    WriteDailyTransactionsToExcel(group.Key.PostingDateTime, excludedTxns, hasBoth, true);
                 }
             }
             
@@ -511,7 +518,7 @@ namespace HVM_Kasserer
             Console.WriteLine($"Excluded amount {excludedAmount} added to '{ColumnHeaderArrangementer}' column above '{RowValueTotal}'.");
         }
 
-        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, bool multipleFiles, bool isExcluded)
+        private void WriteDailyTransactionsToExcel(DateTime date, List<Transaction> dayTransactions, bool multipleFiles, bool? isExcluded)
         {
             string fileName = $"Mobilepay-{date:yyyy-MM-dd}";
 
@@ -521,10 +528,11 @@ namespace HVM_Kasserer
                 fileName = fileName + $"-{sum}";
             }
 
-            if (isExcluded)
+            if (isExcluded == true)
                 fileName = fileName + "-excluded";
-            else
+            else if (isExcluded == false)
                 fileName = fileName + "-donations";
+            // If isExcluded is null, don't add any suffix (combined report)
 
             var fullFileName = fileName + ".xlsx";
 
