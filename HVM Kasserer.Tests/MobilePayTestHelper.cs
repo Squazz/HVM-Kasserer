@@ -155,6 +155,22 @@ namespace HVM_Kasserer_Tests
         }
 
         /// <summary>
+        /// Reads transactions from a CSV file and calls the private GetExcludedTransactionIDs method,
+        /// using the given exclusion keywords instead of the real exclusions file.
+        /// </summary>
+        public HashSet<string> CallGetExcludedTransactionIDs(string csvFilePath, List<string> exclusions)
+        {
+            var instance = GetOrCreateInstance();
+
+            MobilePayType.GetField("mobilePayExclusions", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .SetValue(instance, exclusions);
+
+            var transactions = CallGetTransactions(csvFilePath);
+            var method = MobilePayType.GetMethod("GetExcludedTransactionIDs", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            return (HashSet<string>)method.Invoke(instance, new object[] { transactions })!;
+        }
+
+        /// <summary>
         /// Calls the public static ExtractLast4Digits method from HelperMethods.
         /// </summary>
         public string CallExtractLast4Digits(string phoneNumber)

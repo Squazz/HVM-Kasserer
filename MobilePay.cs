@@ -27,6 +27,15 @@ namespace HVM_Kasserer
         string indsamlingsExcel = indsamlingerFolder + @"\Indsamlings Oversigt - MP + Kirke.xlsx";
         string exclusionsFilePath = basePath + @"\Program-kode\HVM Kasserer\mobilePayExclusions.txt";
 
+        // Messages that mark a payment for food or a menighedsdag, around which the strict donation rule applies
+        private static readonly string[] StrictRuleKeywords = { "menighedsdag", "menigheds dag", "menighedsfag", "mad", "frokost", "middag", "måltid" };
+        // Payments this close in time to a food payment must be explicitly marked to count as donations
+        private static readonly TimeSpan StrictRuleWindow = TimeSpan.FromMinutes(30);
+        // The strict rule is only used from this date, so days that are already booked are sorted as before
+        private static readonly DateTime StrictRuleStartDate = new DateTime(2026, 9, 1);
+        // General words that mark a payment as a donation
+        private static readonly string[] DonationWords = { "gave", "indsamling", "donation" };
+
         List<string> mobilePayExclusions;
 
         public MobilePay()
@@ -39,35 +48,7 @@ namespace HVM_Kasserer
         {
             var transactions = GetTransactions();
 
-            // Step 1: Identify TransactionIDs with exclusion keywords
-            var excludedTransactionIDs = transactions
-                .Where(t => t.Message != null &&
-                            mobilePayExclusions.Any(keyword => NormalizeString(t.Message).Contains(NormalizeString(keyword))))
-                .Select(t => t.TransactionID)
-                .Distinct()
-                .ToHashSet();
-
-            // --- Expanded exclusion logic for concert days ---
-            // Find all transactions with 'koncert' in the message
-            var koncertTransactions = transactions
-                .Where(t => t.Message != null && NormalizeString(t.Message).Contains("koncert"))
-                .ToList();
-
-            foreach (var koncertTx in koncertTransactions)
-            {
-                var day = koncertTx.Date.Date;
-                var windowStart = koncertTx.Date.AddHours(-2);
-                var windowEnd = koncertTx.Date.AddHours(2);
-                var toExclude = transactions.Where(t =>
-                    t.Date.Date == day &&
-                    string.IsNullOrWhiteSpace(t.Message) &&
-                    t.Date >= windowStart && t.Date <= windowEnd
-                );
-                foreach (var tx in toExclude)
-                {
-                    excludedTransactionIDs.Add(tx.TransactionID);
-                }
-            }
+            var excludedTransactionIDs = GetExcludedTransactionIDs(transactions);
 
             // Mark transactions as "excluded" or "regular"
             foreach (var transaction in transactions)
@@ -208,6 +189,91 @@ namespace HVM_Kasserer
                 string? message = date.Where(x => x.Message != null).Select(x => x.Message).First();
                 UpdateExcelForExcluded(SheetNameMobilePay, todaysTotal, dateString, message);
             }
+        }
+
+        private HashSet<string> GetExcludedTransactionIDs(List<Transaction> transactions)
+        {
+            // Step 1: Identify TransactionIDs with exclusion keywords
+            var excludedTransactionIDs = transactions
+                .Where(t => t.Message != null &&
+                            mobilePayExclusions.Any(keyword => NormalizeString(t.Message).Contains(NormalizeString(keyword))))
+                .Select(t => t.TransactionID)
+                .Distinct()
+                .ToHashSet();
+
+            // --- Expanded exclusion logic for concert days ---
+            // Find all transactions with 'koncert' in the message
+            var koncertTransactions = transactions
+                .Where(t => t.Message != null && NormalizeString(t.Message).Contains("koncert"))
+                .ToList();
+
+            foreach (var koncertTx in koncertTransactions)
+            {
+                var day = koncertTx.Date.Date;
+                var windowStart = koncertTx.Date.AddHours(-2);
+                var windowEnd = koncertTx.Date.AddHours(2);
+                var toExclude = transactions.Where(t =>
+                    t.Date.Date == day &&
+                    string.IsNullOrWhiteSpace(t.Message) &&
+                    t.Date >= windowStart && t.Date <= windowEnd
+                );
+                foreach (var tx in toExclude)
+                {
+                    excludedTransactionIDs.Add(tx.TransactionID);
+                }
+            }
+
+            // --- Strict logic around food and menighedsdag payments ---
+            // When the collection and the payments for food come in at the same time, only payments
+            // explicitly marked with a collection purpose count as donations. Everything else within
+            // the time window of a food payment is excluded. Donations earlier or later the same day
+            // (e.g. church at 9 and food at 13) are not affected.
+            // A purpose is a message used by at least two different payers that day (e.g. "SM"),
+            // or a general donation word (e.g. "Gave").
+            var foodTransactions = transactions
+                .Where(t => t.Type != Gebyr && t.Message != null &&
+                            t.Date.Date >= StrictRuleStartDate &&
+                            StrictRuleKeywords.Any(keyword => NormalizeString(t.Message).Contains(keyword)))
+                .ToList();
+
+            foreach (var day in foodTransactions.GroupBy(t => t.Date.Date))
+            {
+                var dayDonations = transactions
+                    .Where(t => t.Date.Date == day.Key && t.Type != Gebyr && !excludedTransactionIDs.Contains(t.TransactionID))
+                    .ToList();
+
+                var recurringMessages = dayDonations
+                    .Where(t => ToWords(t.Message).Length > 0)
+                    .GroupBy(t => ToWords(t.Message))
+                    .Where(g => g.Select(t => t.Name).Distinct().Count() >= 2)
+                    .Select(g => g.Key);
+
+                var purposes = recurringMessages
+                    .Concat(DonationWords)
+                    .ToList();
+
+                var candidates = dayDonations
+                    .Where(t => day.Any(food => (t.Date - food.Date).Duration() <= StrictRuleWindow));
+
+                foreach (var tx in candidates)
+                {
+                    var words = $" {ToWords(tx.Message)} ";
+                    if (!purposes.Any(p => words.Contains($" {p} ")))
+                    {
+                        excludedTransactionIDs.Add(tx.TransactionID);
+                    }
+                }
+            }
+
+            return excludedTransactionIDs;
+        }
+
+        // Lowercase words separated by single spaces, without punctuation, e.g. "SM. Gave!" -> "sm gave"
+        // "&" is written as "og", so "Ordet & Israel" and "Ordet og Israel" are the same
+        private string ToWords(string? input)
+        {
+            var text = (input ?? string.Empty).ToLower().Replace("&", " og ");
+            return string.Join(' ', Regex.Matches(text, @"\w+").Select(m => m.Value));
         }
 
         private void UpdateExcelFile(string sheetName, string name, string last4PhoneDigits, string month, decimal value)
