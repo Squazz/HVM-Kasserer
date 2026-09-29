@@ -202,17 +202,17 @@ Assert.Equal(new DateTime(2025, 1, 6), result);
 
 ### Command Line
 ```bash
-# Run all tests
-dotnet test
+# Run all tests (from the solution folder)
+dotnet test --project "HVM Kasserer.Tests"
 
-# Run specific test file
-dotnet test "HVM Kasserer.Tests\MobilePayTests.cs"
+# Run a specific test class
+dotnet test --project "HVM Kasserer.Tests" --filter-class "HVM_Kasserer_Tests.MobilePayTests"
 
-# Run with verbose output
-dotnet test --verbosity detailed
+# Run with detailed output
+dotnet test --project "HVM Kasserer.Tests" --output detailed
 
-# Run with coverage
-dotnet test /p:CollectCoverage=true /p:CoverageFormat=opencover
+# Run with coverage (report is written to TestResults)
+dotnet test --project "HVM Kasserer.Tests" --coverage --coverage-output-format cobertura
 ```
 
 ### Visual Studio

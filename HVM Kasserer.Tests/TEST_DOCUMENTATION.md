@@ -196,7 +196,7 @@ public void MonthlySummary_ShouldAggregateDonationsForSamePerson()
 
 ### Command Line
 ```bash
-dotnet test "HVM Kasserer.Tests\HVM Kasserer.Tests.csproj"
+dotnet test --project "HVM Kasserer.Tests"
 ```
 
 ### Visual Studio
@@ -206,7 +206,7 @@ dotnet test "HVM Kasserer.Tests\HVM Kasserer.Tests.csproj"
 
 ### With Coverage
 ```bash
-dotnet test /p:CollectCoverage=true /p:CoverageFormat=opencover
+dotnet test --project "HVM Kasserer.Tests" --coverage --coverage-output-format cobertura
 ```
 
 ## Test Statistics
